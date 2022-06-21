@@ -1,12 +1,12 @@
-# import matplotlib.pyplot as plt
 '''
 You should install alive-progress library in your terminal 
 `$ pip3 install progress alive-progress tqdm`
 '''
 from alive_progress import alive_bar
 import pandas as pd
-import numpy as np
 import json
+import shutil
+import sidetable as stb
 
 
 ### Define create chunk list
@@ -22,12 +22,13 @@ def read_rawdata_return_chunklist(filename="raw data.txt", step=1000000) -> list
         if (line.startswith('read') or line.startswith('write')):
             break
     f.close()
-    print(startline)
+    print('startline is', startline)
+
 
     ## read raw data and create chunk list
     chunk = pd.read_csv(filename, names=['operation', 'address', 'size'], usecols=['operation', 'address'],
                         delim_whitespace=True, lineterminator='\n', skiprows=startline - 1, chunksize=step,
-                        header=None, error_bad_lines=False)
+                        header=None, on_bad_lines='skip')
     chunk = list(chunk)  ## make a chunk list
 
     return chunk
@@ -82,13 +83,13 @@ def make_initialaccessCount_eachChunk(df) -> pd.DataFrame():
 def linking_chunks(input_chunk) -> pd.DataFrame:
     if len(input_chunk) == 1:  ## The number of chunk is 1
         num_lines = len(input_chunk)
-        print("num_lines is " + str(num_lines))
+        print("linking_chunks num_lines is " + str(num_lines))
         with alive_bar(num_lines, force_tty=True) as bar:
             df = input_chunk[0]
             bar()
     else:
         num_lines = len(input_chunk)
-        print("num_lines is " + str(num_lines))
+        print("linking_chunks num_lines is " + str(num_lines))
         df = pd.DataFrame()
         with alive_bar(num_lines, force_tty=True) as bar:
             for i in range(len(input_chunk)):
@@ -100,7 +101,7 @@ def linking_chunks(input_chunk) -> pd.DataFrame:
 ## Define make final 'accumul count' column
 def make_finalaccessCount(df, length) -> pd.DataFrame:
     num_lines = df.shape[0]
-    print("num_lines is " + str(num_lines))
+    print("make_finalaccessCount num_lines is " + str(num_lines))
 
     if length == 1:  ## The number of chunk is 1
         df['accumul count'] = df['access count']
@@ -211,9 +212,9 @@ def LFU_rank(df, page_rank, page_count_rank, read_count, write_count):
                             write_count.insert(i, 0)
                         write_count[curr_rank] += 1
 
-            except ValueError: ## not yet referenced page
-                page_rank.append(row['page']) ## add to page_rank
-                page_count_rank.append(0) ## add to page_count_rank
+            except ValueError:  ## not yet referenced page
+                page_rank.append(row['page'])  ## add to page_rank
+                page_count_rank.append(0)  ## add to page_count_rank
             bar()
     return page_rank, page_count_rank, read_count, write_count
 
@@ -276,23 +277,29 @@ def save_cumul_checkpoints(df, filename, distinction=' ') -> None:
 
 ## Define save pre-processed data: lru checkpoints
 def save_lru_checkpoints(page_rank, read_count, write_count, filename, num) -> None:
-    save = {"page_rank": page_rank,
-            "read_count": read_count,
-            "write_count": write_count}
-    with open(filename + '-lru-checkpoint' + str(num) + '.json', 'w', encoding='utf-8') as f:
-        ## indent 2 is not needed but makes the file human-readable
-        json.dump(save, f, indent=2)
+    if os.path.isfile(filename + '-lru-checkpoint' + str(num) + '.json'):
+        pass
+    else:
+        save = {"page_rank": page_rank,
+                "read_count": read_count,
+                "write_count": write_count}
+        with open(filename + '-lru-checkpoint' + str(num) + '.json', 'w', encoding='utf-8') as f:
+            ## indent 2 is not needed but makes the file human-readable
+            json.dump(save, f, indent=2)
 
 
 ## Define save pre-processed data: lfu checkpoints
 def save_lfu_checkpoints(page_rank, page_count_rank, read_count, write_count, filename, num) -> None:
-    save = {"page_rank": page_rank,
-            "page_count_rank": page_count_rank,
-            "read_count": read_count,
-            "write_count": write_count}
-    with open(filename + '-lfu-checkpoint' + str(num) + '.json', 'w', encoding='utf-8') as f:
-        ## indent 2 is not needed but makes the file human-readable
-        json.dump(save, f, indent=2)
+    if os.path.isfile(filename + '-lfu-checkpoint' + str(num) + '.json'):
+        pass
+    else:
+        save = {"page_rank": page_rank,
+                "page_count_rank": page_count_rank,
+                "read_count": read_count,
+                "write_count": write_count}
+        with open(filename + '-lfu-checkpoint' + str(num) + '.json', 'w', encoding='utf-8') as f:
+            ## indent 2 is not needed but makes the file human-readable
+            json.dump(save, f, indent=2)
 
 
 ####################################################################################################
@@ -354,10 +361,10 @@ if __name__ == "__main__":
     import os
 
     ## get current diectory path
-    current_directory = os.getcwd()
+    current_directory = os.getcwd() ## /home/sm_ple38/PycharmProjects/AIWorkloads
 
     ## create path of the checkpoints
-    output_save_folder_path = current_directory + '/checkpoints/'
+    output_save_folder_path = '/home/sm_ple38/PycharmProjects/AIworkloads/' + '/checkpoints/'
     output_path = os.path.join(output_save_folder_path, output_filename)
 
     ## check the path of checkpoints and create the path if not exists
@@ -370,21 +377,25 @@ if __name__ == "__main__":
     for i in range(len(chunk)):
         chunk[i] = make_pageNumber(chunk[i])
 
-   #################################
-   ## Apply real-time LRU ranking###
-   #################################
+    #################################
+    ## Apply real-time LRU ranking###
+    #################################
     lru_page_rank = []
     lru_read_count = []
     lru_write_count = []
 
     os.chdir(output_path)  ## cd output_path
     for i in range(len(chunk)):
-        if i > 0:
-            lru_page_rank, lru_read_count, lru_write_count = load_lru_checkpoints(output_filename, i - 1)
-        lru_page_rank, lru_read_count, lru_write_count = LRU_rank(chunk[i], lru_page_rank, lru_read_count,
+        ### if - else 부분 논리적 수정 필요할 것 같음
+        if os.path.isfile(output_filename + '-lru-checkpoint' + str(i) + '.json'):
+            pass
+        else:
+            if i > 0:
+                lru_page_rank, lru_read_count, lru_write_count = load_lru_checkpoints(output_filename, i - 1)
+            lru_page_rank, lru_read_count, lru_write_count = LRU_rank(chunk[i], lru_page_rank, lru_read_count,
                                                                   lru_write_count)
-        save_lru_checkpoints(lru_page_rank, lru_read_count, lru_write_count, output_filename,i)
-        print("save %d lru checkpoint" % i)
+            save_lru_checkpoints(lru_page_rank, lru_read_count, lru_write_count, output_filename, i)
+            print("save %d lru checkpoint" % i)
     os.chdir(current_directory)  ## cd curr_directory
 
     #################################
@@ -397,12 +408,18 @@ if __name__ == "__main__":
 
     os.chdir(output_path)  ## cd output_path
     for i in range(len(chunk)):
-        if i > 0:
-            lfu_page_rank, lfu_page_count_rank, lfu_read_count, lfu_write_count = load_lfu_checkpoints(output_filename, i - 1)
-        lfu_page_rank, lfu_page_count_rank, lfu_read_count, lfu_write_count = LFU_rank(chunk[i], lfu_page_rank,
+        ### if - else 부분 논리적 수정 필요할 것 같음
+        if os.path.isfile(output_filename + '-lfu-checkpoint' + str(i) + '.json'):
+            pass
+        else:
+            if i > 0:
+                lfu_page_rank, lfu_page_count_rank, lfu_read_count, lfu_write_count = load_lfu_checkpoints(output_filename,
+                                                                                                       i - 1)
+            lfu_page_rank, lfu_page_count_rank, lfu_read_count, lfu_write_count = LFU_rank(chunk[i], lfu_page_rank,
                                                                                        lfu_page_count_rank,
                                                                                        lfu_read_count, lfu_write_count)
-        save_lfu_checkpoints(lfu_page_rank, lfu_page_count_rank, lfu_read_count, lfu_write_count, output_filename, i)
+            save_lfu_checkpoints(lfu_page_rank, lfu_page_count_rank, lfu_read_count, lfu_write_count, output_filename, i)
+            print("save %d lfu checkpoint" % i)
     os.chdir(current_directory)  ## cd curr_directory
 
     ## logcial time - page number
@@ -414,13 +431,21 @@ if __name__ == "__main__":
     if not os.path.exists(gnuplot_input_file_path):
         os.mkdir(gnuplot_input_file_path)
 
-    os.chdir(gnuplot_input_file_path)
+    os.chdir(gnuplot_input_file_path)  ## $cd gnuplot-input/output_filename/
     for i in range(len(chunk)):
         chunk[i] = make_logicalTime(chunk[i])  ## create 'logical time' column at each chunk
         save_data_with_logicalTime(chunk[i], output_filename + '-logical-all.csv', i)  ## make whole data to one file
-        save_data_with_logicalTime(chunk[i], output_filename + '-' + str(i) + '.csv',
-                                   0)  ## make whole data to several files
+        save_data_with_logicalTime(chunk[i], output_filename + '-' + str(i) + '.csv', 0)  ## make whole data to several files
     os.chdir(current_directory)
+
+    source_path = os.path.join(gnuplot_input_folder_path, output_filename)  ## /gnuplot-input/output_filename
+    dest_path = os.path.join(gnuplot_input_folder_path, 'all-csv')  ## /gnuplot-input/all-csv
+    '''
+        gnuplot_input_fil_path + '/' + output_filname is /home/sm_ple38/PycharmProjects/AIworkloads/gnuplot-input//-logical-all.csv
+        => WRONG!!!! PATH 
+    '''
+    # shutil.copy(gnuplot_input_file_path + '/' + output_filename + '-logical-all.csv', 'all-csv')
+    shutil.copy(source_path + '/' + output_filename + '-logical-all.csv', dest_path)
 
     ## popularity : access count
     total_chunk = []
@@ -464,4 +489,4 @@ if __name__ == "__main__":
     os.chdir(current_directory)  ## restore current directory
 
     print('Making Pre-Processed data files is DONE!')
-    print('Check your directory!')
+    print('Check your directory!\n\n')
