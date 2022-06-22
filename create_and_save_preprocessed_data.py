@@ -359,13 +359,19 @@ if __name__ == "__main__":
     output_filename = sys.argv[2]  ## get filename from command line e.g. desktop-gqview-or-photo
 
     import os
-
+    main_directory = '/home/sm_ple38/PycharmProjects/AIworkloads/'
     ## get current diectory path
-    current_directory = os.getcwd() ## /home/sm_ple38/PycharmProjects/AIWorkloads
+    current_directory = os.getcwd() ## /home/sm_ple38/PycharmProjects/AIworkloads => 아닐 수 있음 주의
 
     ## create path of the checkpoints
-    output_save_folder_path = '/home/sm_ple38/PycharmProjects/AIworkloads/' + '/checkpoints/'
+    # output_save_folder_path = '/home/sm_ple38/PycharmProjects/AIworkloads' + '/checkpoints/'
+    # print('output_save_folder_path: \n%s' % output_save_folder_path)
+
+    output_save_folder_path = os.path.join(main_directory + 'checkpoints/')
+    # print('output_save_folder_path: \n%s' % output_save_folder_path)
+
     output_path = os.path.join(output_save_folder_path, output_filename)
+    # print('output_path: \n%s' % output_path)
 
     ## check the path of checkpoints and create the path if not exists
     if not os.path.exists(output_save_folder_path):
@@ -423,7 +429,8 @@ if __name__ == "__main__":
     os.chdir(current_directory)  ## cd curr_directory
 
     ## logcial time - page number
-    gnuplot_input_folder_path = current_directory + '/gnuplot-input/'
+    # gnuplot_input_folder_path = current_directory + '/gnuplot-input/'
+    gnuplot_input_folder_path = main_directory + 'gnuplot-input/' ## 이걸로 써야함
     gnuplot_input_file_path = os.path.join(gnuplot_input_folder_path, output_filename)
 
     if not os.path.exists(gnuplot_input_folder_path):
@@ -432,11 +439,13 @@ if __name__ == "__main__":
         os.mkdir(gnuplot_input_file_path)
 
     os.chdir(gnuplot_input_file_path)  ## $cd gnuplot-input/output_filename/
+    print('gnuplot_input_file_path:\n%s' % gnuplot_input_file_path)
+
     for i in range(len(chunk)):
         chunk[i] = make_logicalTime(chunk[i])  ## create 'logical time' column at each chunk
         save_data_with_logicalTime(chunk[i], output_filename + '-logical-all.csv', i)  ## make whole data to one file
         save_data_with_logicalTime(chunk[i], output_filename + '-' + str(i) + '.csv', 0)  ## make whole data to several files
-    os.chdir(current_directory)
+    os.chdir(gnuplot_input_folder_path) ## 이걸로 써야함
 
     source_path = os.path.join(gnuplot_input_folder_path, output_filename)  ## /gnuplot-input/output_filename
     dest_path = os.path.join(gnuplot_input_folder_path, 'all-csv')  ## /gnuplot-input/all-csv
@@ -444,8 +453,10 @@ if __name__ == "__main__":
         gnuplot_input_fil_path + '/' + output_filname is /home/sm_ple38/PycharmProjects/AIworkloads/gnuplot-input//-logical-all.csv
         => WRONG!!!! PATH 
     '''
-    # shutil.copy(gnuplot_input_file_path + '/' + output_filename + '-logical-all.csv', 'all-csv')
     shutil.copy(source_path + '/' + output_filename + '-logical-all.csv', dest_path)
+    # print('source_path: ', source_path)
+    # print('dest_path: ', dest_path)
+    print()
 
     ## popularity : access count
     total_chunk = []
