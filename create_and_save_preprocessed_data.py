@@ -7,6 +7,7 @@ import pandas as pd
 import json
 import shutil
 import sidetable as stb
+from typing import Union
 
 
 ### Define create chunk list
@@ -23,7 +24,6 @@ def read_rawdata_return_chunklist(filename="raw data.txt", step=1000000) -> list
             break
     f.close()
     print('startline is', startline)
-
 
     ## read raw data and create chunk list
     chunk = pd.read_csv(filename, names=['operation', 'address', 'size'], usecols=['operation', 'address'],
@@ -306,6 +306,18 @@ def save_lfu_checkpoints(page_rank, page_count_rank, read_count, write_count, fi
 ################################# LOAD DATA PARTS ##################################################
 ####################################################################################################
 
+## Define load of logical time, page number data
+def load_data_with_logicalTime(filename, option=0) -> Union[pd.DataFrame, list]:
+    if option == 0:  ## logical-all csv
+        df = pd.read_csv(filename + '-logical-all.csv',
+                         usecols=['logical time', 'operation', 'page'])  ## encoding='utf-8-sig'
+    else:  ## partial csv files except logical-all csv file
+        csv_list = os.listdir(os.getcwd())  ## all files in current directory
+        df = [pd.read_csv(i, usecols=['logical time', 'operation', 'page']) for
+              i in csv_list if i.find('-logical-all') == -1]
+    return df
+
+
 ## Define load of popularity checkpoints
 def load_popularity_checkpoints(filename, distinction='') -> pd.DataFrame:
     name = filename + distinction
@@ -359,9 +371,10 @@ if __name__ == "__main__":
     output_filename = sys.argv[2]  ## get filename from command line e.g. desktop-gqview-or-photo
 
     import os
+
     main_directory = '/home/sm_ple38/PycharmProjects/AIworkloads/'
     ## get current diectory path
-    current_directory = os.getcwd() ## /home/sm_ple38/PycharmProjects/AIworkloads => 아닐 수 있음 주의
+    current_directory = os.getcwd()  ## /home/sm_ple38/PycharmProjects/AIworkloads => 아닐 수 있음 주의
 
     ## create path of the checkpoints
     # output_save_folder_path = '/home/sm_ple38/PycharmProjects/AIworkloads' + '/checkpoints/'
@@ -399,7 +412,7 @@ if __name__ == "__main__":
             if i > 0:
                 lru_page_rank, lru_read_count, lru_write_count = load_lru_checkpoints(output_filename, i - 1)
             lru_page_rank, lru_read_count, lru_write_count = LRU_rank(chunk[i], lru_page_rank, lru_read_count,
-                                                                  lru_write_count)
+                                                                      lru_write_count)
             save_lru_checkpoints(lru_page_rank, lru_read_count, lru_write_count, output_filename, i)
             print("save %d lru checkpoint" % i)
     os.chdir(current_directory)  ## cd curr_directory
@@ -419,18 +432,21 @@ if __name__ == "__main__":
             pass
         else:
             if i > 0:
-                lfu_page_rank, lfu_page_count_rank, lfu_read_count, lfu_write_count = load_lfu_checkpoints(output_filename,
-                                                                                                       i - 1)
+                lfu_page_rank, lfu_page_count_rank, lfu_read_count, lfu_write_count = load_lfu_checkpoints(
+                    output_filename,
+                    i - 1)
             lfu_page_rank, lfu_page_count_rank, lfu_read_count, lfu_write_count = LFU_rank(chunk[i], lfu_page_rank,
-                                                                                       lfu_page_count_rank,
-                                                                                       lfu_read_count, lfu_write_count)
-            save_lfu_checkpoints(lfu_page_rank, lfu_page_count_rank, lfu_read_count, lfu_write_count, output_filename, i)
+                                                                                           lfu_page_count_rank,
+                                                                                           lfu_read_count,
+                                                                                           lfu_write_count)
+            save_lfu_checkpoints(lfu_page_rank, lfu_page_count_rank, lfu_read_count, lfu_write_count, output_filename,
+                                 i)
             print("save %d lfu checkpoint" % i)
     os.chdir(current_directory)  ## cd curr_directory
 
     ## logcial time - page number
     # gnuplot_input_folder_path = current_directory + '/gnuplot-input/'
-    gnuplot_input_folder_path = main_directory + 'gnuplot-input/' ## 이걸로 써야함
+    gnuplot_input_folder_path = main_directory + 'gnuplot-input/'  ## 이걸로 써야함
     gnuplot_input_file_path = os.path.join(gnuplot_input_folder_path, output_filename)
 
     if not os.path.exists(gnuplot_input_folder_path):
@@ -444,8 +460,9 @@ if __name__ == "__main__":
     for i in range(len(chunk)):
         chunk[i] = make_logicalTime(chunk[i])  ## create 'logical time' column at each chunk
         save_data_with_logicalTime(chunk[i], output_filename + '-logical-all.csv', i)  ## make whole data to one file
-        save_data_with_logicalTime(chunk[i], output_filename + '-' + str(i) + '.csv', 0)  ## make whole data to several files
-    os.chdir(gnuplot_input_folder_path) ## 이걸로 써야함
+        save_data_with_logicalTime(chunk[i], output_filename + '-' + str(i) + '.csv',
+                                   0)  ## make whole data to several files
+    os.chdir(gnuplot_input_folder_path)  ## 이걸로 써야함
 
     source_path = os.path.join(gnuplot_input_folder_path, output_filename)  ## /gnuplot-input/output_filename
     dest_path = os.path.join(gnuplot_input_folder_path, 'all-csv')  ## /gnuplot-input/all-csv
